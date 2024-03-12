@@ -6,7 +6,7 @@ use rand::{thread_rng, Rng};
 use std::sync::atomic::{AtomicU64, Ordering};
 use uuid::Uuid;
 
-fn now_timestamp_ms() -> u64 {
+pub fn now_timestamp_ms() -> u64 {
     let now = Utc::now();
     now.timestamp_millis() as u64
 }

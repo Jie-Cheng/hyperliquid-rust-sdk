@@ -1,5 +1,4 @@
 use ethers::{
-    abi::AbiEncode,
     core::k256::{
         ecdsa::{recoverable, signature::DigestSigner},
         elliptic_curve::FieldBytes,
@@ -7,54 +6,27 @@ use ethers::{
     },
     signers::LocalWallet,
     types::{transaction::eip712::Eip712, Signature, H256, U256},
-    utils::keccak256,
 };
 
 use crate::{
     helpers::EthChain,
     prelude::*,
     proxy_digest::Sha256Proxy,
-    signature::{
-        agent::{l1, mainnet, testnet},
-        usdc_transfer,
-    },
+    signature::agent::{l1, mainnet, testnet},
     Error,
 };
 
-pub(crate) fn keccak(x: impl AbiEncode) -> H256 {
-    keccak256(x.encode()).into()
-}
-
-pub(crate) fn sign_l1_action(wallet: &LocalWallet, connection_id: H256, is_mainnet: bool) -> Result<Signature> {
-    sign_with_agent(wallet, EthChain::Localhost, if is_mainnet { "a" } else { "b" }, connection_id)
-}
-
-pub(crate) fn sign_usd_transfer_action(
+pub(crate) fn sign_l1_action(
     wallet: &LocalWallet,
-    chain_type: EthChain,
-    amount: &str,
-    destination: &str,
-    timestamp: u64,
+    connection_id: H256,
+    is_mainnet: bool,
 ) -> Result<Signature> {
-    match chain_type {
-        EthChain::Localhost => Err(Error::ChainNotAllowed),
-        EthChain::Arbitrum => Ok(sign_typed_data(
-            &usdc_transfer::mainnet::UsdTransferSignPayload {
-                destination: destination.to_string(),
-                amount: amount.to_string(),
-                time: timestamp,
-            },
-            wallet,
-        )?),
-        EthChain::ArbitrumGoerli => Ok(sign_typed_data(
-            &usdc_transfer::testnet::UsdTransferSignPayload {
-                destination: destination.to_string(),
-                amount: amount.to_string(),
-                time: timestamp,
-            },
-            wallet,
-        )?),
-    }
+    sign_with_agent(
+        wallet,
+        EthChain::Localhost,
+        if is_mainnet { "a" } else { "b" },
+        connection_id,
+    )
 }
 
 pub(crate) fn sign_with_agent(
@@ -138,24 +110,6 @@ mod tests {
         assert_eq!(
             sign_l1_action(&wallet, connection_id, false)?.to_string(),
             expected_testnet_sig
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_sign_usd_transfer_action() -> Result<()> {
-        let wallet = get_wallet()?;
-
-        let chain_type = EthChain::ArbitrumGoerli;
-        let amount = "1";
-        let destination = "0x0D1d9635D0640821d15e323ac8AdADfA9c111414";
-        let timestamp = 1690393044548;
-
-        let expected_sig = "78f879e7ae6fbc3184dc304317e602507ac562b49ad9a5db120a41ac181b96ba2e8bd7022526a1827cf4b0ba96384d40ec3a5ed4239499c328081f3d0b394bb61b";
-        assert_eq!(
-            sign_usd_transfer_action(&wallet, chain_type, amount, destination, timestamp)?
-                .to_string(),
-            expected_sig
         );
         Ok(())
     }

@@ -1,11 +1,5 @@
-use crate::{
-    errors::Error,
-    helpers::{float_to_string_for_hashing, uuid_to_hex_string},
-    prelude::*,
-};
+use crate::{helpers::float_to_string_for_hashing, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use uuid::Uuid;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Limit {
@@ -61,17 +55,17 @@ pub enum ClientOrder {
     Trigger(ClientTrigger),
 }
 pub struct ClientOrderRequest {
-    pub asset: String,
+    pub asset_id: u32,
     pub is_buy: bool,
     pub reduce_only: bool,
     pub limit_px: f64,
     pub sz: f64,
-    pub cloid: Option<Uuid>,
+    pub cloid: String,
     pub order_type: ClientOrder,
 }
 
 impl ClientOrderRequest {
-    pub(crate) fn convert(self, coin_to_asset: &HashMap<String, u32>) -> Result<OrderRequest> {
+    pub(crate) fn convert(self) -> Result<OrderRequest> {
         let order_type = match self.order_type {
             ClientOrder::Limit(limit) => Order::Limit(Limit { tif: limit.tif }),
             ClientOrder::Trigger(trigger) => Order::Trigger(Trigger {
@@ -80,18 +74,15 @@ impl ClientOrderRequest {
                 tpsl: trigger.tpsl,
             }),
         };
-        let &asset = coin_to_asset.get(&self.asset).ok_or(Error::AssetNotFound)?;
-
-        let cloid = self.cloid.map(uuid_to_hex_string);
 
         Ok(OrderRequest {
-            asset,
+            asset: self.asset_id,
             is_buy: self.is_buy,
             reduce_only: self.reduce_only,
             limit_px: float_to_string_for_hashing(self.limit_px),
             sz: float_to_string_for_hashing(self.sz),
-            order_type,
-            cloid,
+            cloid: Some(self.cloid),
+            order_type: order_type,
         })
     }
 }
