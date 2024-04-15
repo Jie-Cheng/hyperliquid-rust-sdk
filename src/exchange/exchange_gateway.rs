@@ -9,7 +9,7 @@ use crate::{
 };
 use ethers::{
     signers::LocalWallet,
-    types::{Signature, H256},
+    types::{Signature, H160, H256},
 };
 use itertools::izip;
 use serde::{Deserialize, Serialize};
@@ -23,11 +23,16 @@ enum GatewayActions {
 }
 
 impl GatewayActions {
-    fn hash(&self, timestamp: u64) -> Result<H256> {
+    fn hash(&self, timestamp: u64, vault_address: Option<H160>) -> Result<H256> {
         let mut bytes =
             rmp_serde::to_vec_named(self).map_err(|e| Error::RmpParse(e.to_string()))?;
         bytes.extend(timestamp.to_be_bytes());
-        bytes.push(0);
+        if let Some(vault_address) = vault_address {
+            bytes.push(1);
+            bytes.extend(vault_address.to_fixed_bytes());
+        } else {
+            bytes.push(0);
+        }
         Ok(H256(ethers::utils::keccak256(bytes)))
     }
 }
@@ -38,6 +43,7 @@ struct ExchangePayload {
     action: serde_json::Value,
     signature: Signature,
     nonce: u64,
+    vault_address: Option<H160>,
 }
 
 pub fn bulk_cancel(
@@ -46,6 +52,7 @@ pub fn bulk_cancel(
     asset_id: u32,
     cloid: Vec<String>, // eg {"0x1c0f0be5594940158311413cb05b34cc"}
     nonce: u64,
+    vault: Option<H160>,
 ) -> Result<String> {
     let mut transformed_cancels = Vec::new();
 
@@ -60,7 +67,7 @@ pub fn bulk_cancel(
     let action = GatewayActions::CancelByCloid(BulkCancelCloid {
         cancels: transformed_cancels,
     });
-    let connection_id = action.hash(nonce)?;
+    let connection_id = action.hash(nonce, vault)?;
     let signature = sign_l1_action(&wallet, connection_id, mainnet)?;
     let action = serde_json::to_value(&action).map_err(|e| Error::JsonParse(e.to_string()))?;
 
@@ -68,6 +75,7 @@ pub fn bulk_cancel(
         action,
         signature,
         nonce,
+        vault_address: vault,
     };
 
     let res =
@@ -86,6 +94,7 @@ pub fn bulk_order(
     limit_px: Vec<f64>,
     sz: Vec<f64>,
     nonce: u64,
+    vault: Option<H160>,
 ) -> Result<String> {
     let mut transformed_orders = Vec::new();
 
@@ -115,7 +124,7 @@ pub fn bulk_order(
         orders: transformed_orders,
         grouping: "na".to_string(),
     });
-    let connection_id = action.hash(nonce)?;
+    let connection_id = action.hash(nonce, vault)?;
     let signature = sign_l1_action(&wallet, connection_id, mainnet)?;
 
     let action = serde_json::to_value(&action).map_err(|e| Error::JsonParse(e.to_string()))?;
@@ -124,6 +133,7 @@ pub fn bulk_order(
         action,
         signature,
         nonce,
+        vault_address: vault,
     };
 
     let res =
